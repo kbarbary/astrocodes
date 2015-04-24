@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 
 PYPI_BROWSE_URL = "https://pypi.python.org/pypi?:action=browse&show=all&c={0:d}"
 PYPI_URL = "https://pypi.python.org/pypi/{0}/json"
-CACHE_DIR = ".cache"
+CACHE_DIR = "data"
 CACHE_FILE = "package_listing_{0}.html"
 
 def ensure_cache_dir_exists():

@@ -8,6 +8,7 @@ Get stats on some PyPI packages.
 - Python 3 (for fun)
 - beautifulsoup4 (`conda install beautiful-soup` or
   `pip install beautifulsoup4`)
+- jinja2 (for `render` script)
 
 ## Example
 
@@ -23,5 +24,13 @@ PyPI's "browse" page (https://pypi.python.org/pypi?%3Aaction=browse),
 browse to the classifier you want, and look at the 'c=' query in the
 URL.
 
-Package data is downloaded to a `.cache` directory, e.g.,
-`.cache/astropy.json`.
+Package data is downloaded to a `data` directory, e.g.,
+`data/astropy.json`.
+
+## Render
+
+```
+render
+```
+
+Places HTML output in `output` directory.

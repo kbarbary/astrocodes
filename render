@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+
+import os
+import time
+import shutil
+import glob
+from datetime import datetime
+import json
+
+from jinja2 import Template
+
+CACHE_DIR = "data"
+STATIC_DIR = "static"
+OUTPUT_DIR = "output"
+
+# munge data
+def parse_package_data():
+    packages = []
+    for fname in glob.glob(os.path.join(CACHE_DIR, "*.json")):
+        print(fname)
+        with open(fname) as f:
+            pkgdata = json.load(f)
+
+        # calculate most recent release
+        most_recent_time = None
+        for ver, infolist in pkgdata["releases"].items():
+            for info in infolist:
+                t = datetime.strptime(info["upload_time"], "%Y-%m-%dT%H:%M:%S")
+                if most_recent_time is None or t > most_recent_time:
+                    most_recent_time = t
+
+        updated = ("" if most_recent_time is None
+                   else most_recent_time.strftime("%Y-%m-%dT%H:%M:%S"))
+
+        # shorten crazy-long licenses
+        license = pkgdata["info"]["license"]
+        if license is None:
+            license = ""
+        if len(license) > 40:
+            license = license[:40] + " ..."
+
+        pkg = {"name": pkgdata["info"]["name"],
+               "url": pkgdata["info"]["package_url"],
+               "summary": pkgdata["info"]["summary"],
+               "license": license,
+               "version": pkgdata["info"]["version"],
+               "downloads_last_month": pkgdata["info"]["downloads"]["last_month"],
+               "updated": updated
+           }
+        packages.append(pkg)
+
+    return packages
+
+
+def main():
+    # data that goes on page
+    ctime = time.strftime('%Y %b %d %l:%M %p %Z')
+    packages = parse_package_data()
+    packages.sort(key=lambda x: x["downloads_last_month"], reverse=True)
+
+    # load template
+    with open(os.path.join(STATIC_DIR, "template.html")) as f:
+        template_html = f.read()
+    template = Template(template_html)
+
+    # copy static files
+    for subdir in ["css", "js", "style"]:
+        src = os.path.join(STATIC_DIR, subdir)
+        dst = os.path.join(OUTPUT_DIR, subdir)
+        if not os.path.exists(dst):
+            shutil.copytree(src, dst)
+
+    # render and ouput page.
+    page = template.render(packages=packages,
+                           last_generated=ctime)
+    with open(os.path.join(OUTPUT_DIR, "index.html"), "w") as f:
+        f.write(page)
+
+if __name__ == '__main__':
+    main()
