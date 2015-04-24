@@ -1,0 +1,104 @@
+#!/usr/bin/env python
+
+import os
+from urllib.request import urlopen
+import json
+
+from bs4 import BeautifulSoup
+
+
+PYPI_BROWSE_URL = "https://pypi.python.org/pypi?:action=browse&show=all&c={0:d}"
+PYPI_URL = "https://pypi.python.org/pypi/{0}/json"
+CACHE_DIR = ".cache"
+CACHE_FILE = "package_listing.html"
+
+def ensure_cache_dir_exists():
+    if not os.path.exists(CACHE_DIR):
+        os.mkdir(CACHE_DIR)
+
+def get_packages(classifier_num):
+    """Get a list of all packages with the given classifier number from PyPI.
+
+    Parameters
+    ----------
+    classifier_num : int
+        Classifier number. To get this number for a given classifier, go to
+        PyPI's "browse" page (https://pypi.python.org/pypi?%3Aaction=browse),
+        browse to the classifier you want, and look at the 'c=' query in the
+        URL.
+
+    Returns
+    -------
+    packages : dict
+        Dictionary where keys are package names and values are descriptions.
+    """
+
+    url = PYPI_BROWSE_URL.format(classifier_num)
+    cache_file = os.path.join(CACHE_DIR, CACHE_FILE)
+
+    if os.path.exists(cache_file):
+        with open(cache_file, "r") as f:
+            html_doc = f.read()
+    else:
+        with urlopen(url) as result:
+            html_doc = result.read()
+        ensure_cache_dir_exists()
+        with open(cache_file, "w") as f:
+            f.buffer.write(html_doc)
+
+    # main table on page has class 'list'. Get table data elements from it.
+    soup = BeautifulSoup(html_doc)
+    names = []
+    descriptions = []
+    for tag in soup.select("table[class~=list] tr td"):
+
+        # The last row has an empty <td> in it with a unique id.
+        if tag.id == "last":
+            continue
+
+        # First column has an <a href...> element, second column just has
+        # the description.
+        linktag = tag.a
+        if linktag is not None:
+            names.append(linktag.string)
+        else:
+            descriptions.append(tag.string)
+
+    # crop duplicate entries
+    unique_names = []
+    unique_descriptions = []
+    for name, descr in zip(names, descriptions):
+        if name not in unique_names:
+            unique_names.append(name)
+            unique_descriptions.append(descr)
+
+    return dict(zip(unique_names, unique_descriptions))
+
+
+def get_package_data(name):
+    """Get JSON data for a given package from PyPI."""
+
+    url = PYPI_URL.format(name)
+    cache_file = os.path.join(CACHE_DIR, "{0}.json".format(name))
+
+    if os.path.exists(cache_file):
+        with open(cache_file, "w") as f:
+            data = json.load(f)
+    else:
+        response = urlopen(url)
+        s = response.readall().decode('utf-8')
+        ensure_cache_dir_exists()
+        with open(cache_file, "w") as f:
+            f.write(s)
+        data = json.loads(s)
+
+    return data
+
+def main():
+    
+    pkgs = get_packages(387)
+    data = get_package_data("sep")
+    print(data)
+
+if __name__ == "__main__":
+    main()
