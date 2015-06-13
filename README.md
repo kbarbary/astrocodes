@@ -1,36 +1,16 @@
-pypi-stats
-==========
+Astro Code Stats
+================
 
-Get stats on some PyPI packages.
+Get stats on:
+
+- Codes listed on ASCL.net
+- PyPI packages with classifier `Topic ::Scientific/Engineering :: Astronomy`
+  or with "astro" or "cosmo" in the description.
 
 ## Requirements
 
-- Python 3 (for fun)
+- Python 3
+- requests
 - beautifulsoup4 (`conda install beautiful-soup` or
   `pip install beautifulsoup4`)
 - jinja2 (for `render` script)
-
-## Example
-
-To download package data for all packages with classifier `Topic ::
-Scientific/Engineering :: Astronomy`:
-
-```
-query-pypi 387
-```
-
-To find the numerical code for your classifier of interest go to
-PyPI's "browse" page (https://pypi.python.org/pypi?%3Aaction=browse),
-browse to the classifier you want, and look at the 'c=' query in the
-URL.
-
-Package data is downloaded to a `data` directory, e.g.,
-`data/astropy.json`.
-
-## Render
-
-```
-render
-```
-
-Places HTML output in `output` directory.
