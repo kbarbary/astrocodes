@@ -38,36 +38,42 @@
   <thead>
     <tr>
       <th>Package</th>
-      <!-- <th>Ver (GH)</th> -->
-      <th><span class="hint--bottom hint--rounded " data-hint="Last release"><span class="octicon octicon-calendar"></span></span></th>
-      <th><span class="hint--bottom hint--rounded " data-hint="Downloads from PyPI last month"><span class="octicon octicon-cloud-download"></span></span></th>
-      <th><span class="hint--bottom hint--rounded " data-hint="Version"><span class="octicon octicon-milestone"></span></span></th>
-      <th><span class="hint--bottom hint--rounded " data-hint="License"><span class="octicon octicon-organization"></span></span></th>
-      <th><span class="hint--bottom hint--rounded " data-hint="Stars"><span class="octicon octicon-star"></span></span></th>
-      <th><span class="hint--bottom hint--rounded " data-hint="Forks"><span class="octicon octicon-repo-forked"></span></span></th>
-      <th><span class="hint--bottom hint--rounded " data-hint="Pull Requests"><span class="octicon octicon-git-pull-request"></span></span></th>
-      <th data-sortable='false'><span class="hint--bottom" data-hint="52 week activity report"><span class="octicon octicon-pulse"></span> (52wk)</span></th>
+      <th>From</th>
+      <th>Language</th>
+      <th>URLs</th>
     </tr>
   </thead>
   <tbody>
     {% for pkg in packages %}
     <tr>
-      <td><a href="{{ pkg.url }}"><span class="hint--bottom hint--rounded hint--bounce" data-hint="{{ pkg.summary }}">{{ pkg.name }}</span></a></td>
-      <td>{{ pkg.updated }}</td>
-      <td>{{ pkg.downloads_last_month }}</td>
-      <td>{{ pkg.version }}</td>
-      <td>{{ pkg.license }}</td>
-      <td></td>
-      <td></td>
-      <td></td>
-      <td><span class='inlinesparkline'>sparkline</span></td>
+      <td>{{ pkg.name }}</td>
+      <td>
+          {% if pkg.ascl_url is defined %}
+          <a href="{{ pkg.ascl_url }}">ASCL</a>
+          {% endif %}
+          {% if pkg.pypi_url is defined %}
+          <a href="{{ pkg.pypi_url }}">PyPI</a>
+          {% endif %}
+      </td>
+      <td>
+          {% if pkg.language is defined %}
+          <span class="hint--bottom hint--rounded hint--
+bounce" data-hint="{{ pkg.language_from }}">{{ pkg.language }}</span>
+          {% endif %}
+      </td>
+      <td>
+          {% for url in pkg.urls %}
+          <a href="{{ url }}">URL</a>
+          {% endfor %}
+      </td>
+
     </tr>
     {% endfor %}
   </tbody>
 </table>
 
 
-<p>Page was last generated at {{last_generated}} UTC. Built with help from the <a href="https://github.com/ropensci/dashboard" title="ropensci/dashboard GitHub">R dashboard package</a>.</p>
+<p>Page was last generated at {{last_generated}}.</p>
 
 </script>
 <script type='text/javascript' src='js/bootstrap-sortable.js'></script>
