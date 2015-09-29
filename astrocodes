@@ -235,21 +235,21 @@ def first_check_ssl(url):
     try:
         requests.get(url)
     except:  # Catches any error. Hoping that only SSL errors come up here.
-        print("URL gives SSL error: %s" % url)
+        # print("URL gives SSL error: %s" % url)
         # Using tps:// instead of https:// to allow for ftps://
         if "tp://" in url:
             url = url.replace('tp://', 'tps://')
             try:
                 requests.get(url)
             except:
-                print("Well that didn't work.")
+                # print("Well that didn't work.")
                 return ""
         elif "tps://" in url:
             url = url.replace('tps://', 'tp://')
             try:
                 requests.get(url)
             except:
-                print("Well that didn't work.")
+                # print("Well that didn't work.")
                 return ""
         else:
             return ""
@@ -379,13 +379,13 @@ def render():
 
         for url in pkg["urls"]:
             temp_link = check_sourcecode_url(url)
-            print("Source url: %s" % temp_link)
+            # print("Source url: %s" % temp_link)
             pkg["sourcecode"] = temp_link
             # TODO: once it finds a sourcecode link, break out of for-loop
 
         packages.append(pkg)
 
-    print("\nDone with sourcecode URLs.\n")
+    # print("\nDone with sourcecode URLs.\n")
 
     # sort by name
     packages.sort(key=lambda x: x["name"])
