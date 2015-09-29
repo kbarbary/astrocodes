@@ -410,5 +410,7 @@ if __name__ == "__main__":
         fetch_pypi()
     elif args.action == "fetch-ascl":
         urlretrieve(ASCL_URL, ASCL_FILE)
+    elif args.action == "get-source-url":
+        get_source_urls()
     elif args.action == "render":
         render()
