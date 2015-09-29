@@ -19,6 +19,15 @@ Get stats on:
   `pip install beautifulsoup4`)
 - jinja2 (for `render` script)
 
+## Run
+
+```
+astrocodes
+```
+
+Output HTML is placed in `output` directory. Data is cached in `data`
+directory. (Directories are automatically created.)
+
 ## Deploy
 
 To deploy built page to http://username.github.io/astrocodes, run
