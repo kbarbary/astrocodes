@@ -1,6 +1,8 @@
 Astro Code Stats
 ================
 
+![Astro Hack Week](https://img.shields.io/badge/Astro-Hack%20Week-green.svg?style=flat-square)
+
 Get stats on:
 
 - Codes listed on ASCL.net
