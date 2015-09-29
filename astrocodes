@@ -176,12 +176,12 @@ def render():
     ascl_pkgs = {pkg["title"].split(":")[0].lower(): pkg
                  for pkg in ascl_pkgs.values()}  # re-key packages.
 
-    # clean empty links
+    # clean empty links in ASCL (there is at least one)
     for pkg in ascl_pkgs.values():
         while '' in pkg["site_list"]:
             pkg["site_list"].remove('')
 
-    # get joint names
+    # get set of all package names
     names = set(pypi_pkgs)
     names.update(ascl_pkgs)
 
@@ -194,6 +194,8 @@ def render():
         if name in pypi_pkgs:
             pypi_pkg = pypi_pkgs[name]
             pkg["pypi_url"] = pypi_pkg['info']['package_url']
+            if "description" not in pkg:
+                pkg["description"] = pypi_pkg['info']['summary']
             pkg["language"] = "Python"
             pkg["language_from"] = "because package listed on PyPI"
             if pypi_pkg["info"]["home_page"] is not None:
@@ -205,7 +207,7 @@ def render():
             ascl_pkg = ascl_pkgs[name]
             pkg["ascl_url"] = 'http://ascl.net/' + ascl_pkg['ascl_id']
             pkg["urls"].extend(ascl_pkg["site_list"])
-            pkg["description"] = ascl_pkg["abstract"]
+            pkg["description"] = ascl_pkg["title"].split(':')[-1]
             if "language" not in pkg:
                 lang = detect_language(ascl_pkg["abstract"])
                 if lang is not None:
