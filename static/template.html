@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-   <title>Astronomy packages on Python Package Index (PyPI)</title>
+   <title>Astronomy packages</title>
   <script type='text/javascript' src='js/jquery-1.7.2.min.js'></script>
   <script type='text/javascript' src='js/jquery.sparkline.js'></script>
   <link href='http://fonts.googleapis.com/css?family=Source+Code+Pro' rel='stylesheet' type='text/css'>
@@ -41,18 +41,20 @@
       <th>From</th>
       <th>Language</th>
       <th>URLs</th>
+      <th>Source Code</th>
     </tr>
   </thead>
   <tbody>
     {% for pkg in packages %}
     <tr>
-      <td>{{ pkg.name }}</td>
+      <td><span class="hint--bottom hint--rounded hint--
+bounce" data-hint="{{ pkg.description }}">{{ pkg.name }}</span></td>
       <td>
           {% if pkg.ascl_url is defined %}
-          <a href="{{ pkg.ascl_url }}">ASCL</a>
+          <a href="{{ pkg.ascl_url }}"><span class="label label-default">ASCL</span></a>
           {% endif %}
           {% if pkg.pypi_url is defined %}
-          <a href="{{ pkg.pypi_url }}">PyPI</a>
+          <a href="{{ pkg.pypi_url }}"><span class="label label-success">PyPI</span></a>
           {% endif %}
       </td>
       <td>
@@ -63,6 +65,11 @@ bounce" data-hint="{{ pkg.language_from }}">{{ pkg.language }}</span>
       </td>
       <td>
           {% for url in pkg.urls %}
+          <a href="{{ url }}">URL</a>
+          {% endfor %}
+      </td>
+      <td>
+          {% for url in pkg.repo_urls %}
           <a href="{{ url }}">URL</a>
           {% endfor %}
       </td>
