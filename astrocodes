@@ -9,6 +9,7 @@ from pprint import pprint
 import glob
 from datetime import datetime
 import time
+import shutil
 
 import requests
 from bs4 import BeautifulSoup

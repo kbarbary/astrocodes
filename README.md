@@ -1,7 +1,9 @@
 Astro Code Stats
 ================
 
-![Astro Hack Week](https://img.shields.io/badge/Astro-Hack%20Week-green.svg?style=flat-square)
+![Astro Hack Week](https://img.shields.io/badge/Astro-Hack%20Week-green.svg?style=flat-square) *Work in progress!*
+
+Current built page: http://kbarbary.github.io/astrocodes
 
 Get stats on:
 
@@ -16,3 +18,13 @@ Get stats on:
 - beautifulsoup4 (`conda install beautiful-soup` or
   `pip install beautifulsoup4`)
 - jinja2 (for `render` script)
+
+## Deploy
+
+To deploy built page to http://username.github.io/astrocodes, run
+
+```
+deploy.sh username
+```
+
+(uses SSH authentication with git:// protocol).
