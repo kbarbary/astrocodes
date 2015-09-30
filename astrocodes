@@ -281,48 +281,9 @@ def parse_html_for_urls(html_doc):
     return urls
 
 
-def first_check_ssl(url):
-    """ Checks the url for SSL errors using requests.get(url). If it gives an
-    error, it either adds or removes the 's' of https or ftps.
-
-    Parameters
-    ----------
-    url : str
-        A URL.
-
-    Returns
-    -------
-    str
-        A URL that hopefully shouldn't give an SSL error!
-    """
-    try:
-        requests.get(url)
-    except:  # Catches any error. Hoping that only SSL errors come up here.
-        # print("URL gives SSL error: %s" % url)
-        # Using tps:// instead of https:// to allow for ftps://
-        if "tp://" in url:
-            url = url.replace('tp://', 'tps://')
-            try:
-                requests.get(url)
-            except:
-                # print("Well that didn't work.")
-                return ""
-        elif "tps://" in url:
-            url = url.replace('tps://', 'tp://')
-            try:
-                requests.get(url)
-            except:
-                # print("Well that didn't work.")
-                return ""
-        else:
-            return ""
-
-    return url
-
-
 def check_sourcecode_url(source_url):
-    """ Get the URL of the source code repository.
-    URLs from the source webpage listed on PyPI or ASCL.
+    """ Get the URL of the source code repository. Check for SSL errors while
+    loading source html. URLs from the source webpage listed on PyPI or ASCL.
 
     Parameters
     ----------
@@ -338,14 +299,30 @@ def check_sourcecode_url(source_url):
 
     if is_url_a_repo(source_url):
         return source_url
-    
+
     if '.' not in source_url and '/' not in source_url:
         return None
 
-    source_url = first_check_ssl(source_url)
+    try:
+        source_html = load_html_from_url(source_url)
+    except:  # Catches any error. Hoping that only SSL errors come up here.
+        # print("URL gives SSL error: %s" % url)
+        # Using tps:// instead of https:// to allow for ftps://
+        if "tp://" in source_url:
+            source_url = source_url.replace('tp://', 'tps://')
+            try:
+                source_html = load_html_from_url(source_url)
+            except:
+                return None
+        elif "tps://" in source_url:
+            source_url = source_url.replace('tps://', 'tp://')
+            try:
+                source_html = load_html_from_url(source_url)
+            except:
+                return None
+        else:
+            return None
 
-
-    source_html = load_html_from_url(source_url)
     urls = parse_html_for_urls(source_html)
 
     for link in urls:
