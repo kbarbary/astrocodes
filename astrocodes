@@ -206,7 +206,8 @@ def load_html_from_url(url, clobber=False):
     # when caching the file. So, replace all slashes and colons with
     # '-' to create a filename where we will cache the page. Note that
     # this mapping isn't *completely* foolproof - there can be name
-    # collisions.
+    # collisions! For example, github.com/user/page-name/ and
+    # github.com/user/page/name/ will map to the same filename.
     safe_url = url.replace(':', '-').replace('/', '-')
     fname = os.path.join(PAGES_DIR, safe_url)
     if not os.path.exists(fname) or clobber:
@@ -357,6 +358,7 @@ def detect_language(s):
 
 
 def main(clobber=False):
+    """Do everything."""
 
     # Load PyPI packages
     pypi_pkgs = load_pypi(clobber=clobber)
