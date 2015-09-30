@@ -338,11 +338,12 @@ def check_sourcecode_url(source_url):
 
     if is_url_a_repo(source_url):
         return source_url
+    
+    if '.' not in source_url and '/' not in source_url:
+        return None
 
     source_url = first_check_ssl(source_url)
 
-    if '.' not in source_url and '/' not in source_url:
-        return None
 
     source_html = load_html_from_url(source_url)
     urls = parse_html_for_urls(source_html)
@@ -456,41 +457,8 @@ def main(clobber=False):
     with open(os.path.join(OUTPUT_DIR, "index.html"), "w") as f:
         f.write(page)
 
-    """
-    n = 0
-    for name in pkgs.keys():
-        if n > 10:
-            break
-        n += 1
-
-        print()
-        print(name)
-
-        print("ASCL site_list:", end=None)
-        if "ascl" in pkgs[name]:
-            print(pkgs[name]["ascl"]["site_list"])
-
-        print("PyPI home_page:", end=None)
-        if "pypi" in pkgs[name]:
-            print(pkgs[name]["pypi"]["info"]["home_page"])
-
-        print("PyPI docs_url:", end=None)
-        if "pypi" in pkgs[name]:
-            print(pkgs[name]["pypi"]["info"]["docs_url"])
-    """
-
     # TODO
-    #
-    # fill 'home_url', 'docs_url', 'repo_url' from
-    # - ASCL site_list
-    # - PyPI docs_url, home_page
-
-    # fill 'summary' from pypi summary and ASCL title
-
     # Link-check ASCL URLs with HEAD requests - cut if all dead.
-
-    # Try to fill in missing repos by getting homepage index page and scanning
-    # links.
 
 
 if __name__ == "__main__":
