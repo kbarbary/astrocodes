@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+"""Render an html page of astroonomy software packages.
+Data is downloaded and cached as needed."""
 
 import os
 import json
@@ -26,10 +28,12 @@ PYPI_MAIN_URL = "https://pypi.python.org/pypi?%3Aaction=index"
 PYPI_CLASSIFIER_URL = ("https://pypi.python.org/pypi"
                        "?:action=browse&show=all&c=387")
 PYPI_PACKAGE_URL = "https://pypi.python.org/pypi/{0}/json"
-PYPI_DATA_DIR = os.path.join(DATA_DIR, "pypi")
+PYPI_DIR = os.path.join(DATA_DIR, "pypi")
 
 ASCL_URL = "http://ascl.net/code/json"
 ASCL_FILE = os.path.join(DATA_DIR, "ascl.json")
+
+PAGES_DIR = os.path.join(DATA_DIR, "pages")
 
 def info(msg):
     """Print a line in blue (assumes we have a color terminal!)"""
@@ -47,9 +51,9 @@ def urlretrieve(url, fname):
         Name of file to write URLs to.
 
     """
-    info("Fetching " + url)
+    info("fetch " + url)
     r = requests.get(url)
-    with open(os.path.join(fname), "w") as f:
+    with open(fname, "w") as f:
         f.write(r.text)
 
 
@@ -120,22 +124,26 @@ def parse_pypi_html(html_doc, terms=None, strip_version=False):
     return result
 
 
-def fetch_pypi():
-    """ Fetch 'astronomy' packages listed on PyPI. """
-    if not os.path.exists(PYPI_DATA_DIR):
-        os.makedirs(PYPI_DATA_DIR)
+def load_pypi(clobber=False):
+    """Load 'astronomy' packages listed on PyPI.
+
+    This includes packages with Astronomy in the keywords,
+    as well as packages with 'astro' or 'cosmo' in the description."""
+
+    if not os.path.exists(PYPI_DIR):
+        os.makedirs(PYPI_DIR)
 
     # Get names and descriptions of all "astronomy" packages.
-    fname = os.path.join(PYPI_DATA_DIR, "packages.json")
-    if not os.path.exists(fname):
-        info("Fetching " + PYPI_CLASSIFIER_URL)
+    fname = os.path.join(PYPI_DIR, "packages.json")
+    if not os.path.exists(fname) or clobber:
+        info("fetch " + PYPI_CLASSIFIER_URL)
         r = requests.get(PYPI_CLASSIFIER_URL)
-        info("Parsing " + PYPI_CLASSIFIER_URL)
+        info("parse " + PYPI_CLASSIFIER_URL)
         pkgs = parse_pypi_html(r.text)
 
-        info("Fetching " + PYPI_MAIN_URL)
+        info("fetch " + PYPI_MAIN_URL)
         r = requests.get(PYPI_MAIN_URL)
-        info("Parsing " + PYPI_MAIN_URL)
+        info("parse " + PYPI_MAIN_URL)
         pkgs2 = parse_pypi_html(r.text, terms=["astro", "cosmo"],
                                 strip_version=True)
         pkgs.update(pkgs2)
@@ -145,11 +153,66 @@ def fetch_pypi():
         pkgs = read_json(fname)
 
     # Get and save data for each package
+    result = {}
     for name in pkgs:
         url = PYPI_PACKAGE_URL.format(name)
-        fname = os.path.join(PYPI_DATA_DIR, name + ".json")
-        if not os.path.exists(fname):
+        fname = os.path.join(PYPI_DIR, name + ".json")
+        if not os.path.exists(fname) or clobber:
             urlretrieve(url, fname)
+        result[name.lower()] = read_json(fname)
+
+    return result
+
+
+def load_ascl(clobber=False):
+    """Load packages from the Astrophysics Source Code Library.
+
+    Downloaded data is cached.
+
+    Parameters
+    ----------
+    clobber : bool
+        If true, re-fetch data even if cached data exists.
+
+    Returns
+    -------
+    pkgs : dict
+       Dictionary, keyed by the package title.
+    """
+
+    if not os.path.exists(ASCL_FILE) or clobber:
+        urlretrieve(ASCL_URL, ASCL_FILE)
+    pkgs = read_json(ASCL_FILE)
+
+    # re-key packages on the title before returning.
+    return {pkg["title"].split(":")[0].lower(): pkg
+            for pkg in pkgs.values()}
+
+
+def load_html_from_url(url, clobber=False):
+    """Return HTML as string from URL. Caches downloaded files.
+
+    Parameters
+    ----------
+    url : str
+    clobber : bool
+        If True, re-download, even if cached files are present.
+    """
+
+    if not os.path.exists(PAGES_DIR):
+        os.makedirs(PAGES_DIR)
+
+    # URLSs have slashes in them, so we can't use `url` as a filename
+    # when caching the file. So, replace all slashes and colons with
+    # '-' to create a filename where we will cache the page. Note that
+    # this mapping isn't *completely* foolproof - there can be name
+    # collisions.
+    safe_url = url.replace(':', '-').replace('/', '-')
+    fname = os.path.join(PAGES_DIR, safe_url)
+    if not os.path.exists(fname) or clobber:
+        urlretrieve(url, fname)
+    with open(fname, 'r') as f:
+        return f.read()
 
 
 def is_url_a_repo(url_string):
@@ -281,8 +344,8 @@ def check_sourcecode_url(source_url):
     if '.' not in source_url and '/' not in source_url:
         return None
 
-    source_html = requests.get(source_url)
-    urls = parse_html_for_urls(source_html.text)
+    source_html = load_html_from_url(source_url)
+    urls = parse_html_for_urls(source_html)
 
     for link in urls:
         if is_url_a_repo(link):
@@ -314,30 +377,14 @@ def detect_language(s):
 
     return None
 
-def get_source_urls():
-    """ Gets source URLs from PyPI and ASCL for rendering the table. """
 
-    # TODO: load PyPI packages and ASCL packages, get source urls, save all
-    # TODO: (cont')package info somewhere, then be able to load that into render
-
-    print("Doesn't work yet. Currently a part of render.")
-    pass
-
-
-
-def render():
+def main(clobber=False):
 
     # Load PyPI packages
-    fnames = os.listdir(PYPI_DATA_DIR)
-    fnames.remove("packages.json")
-    pypi_pkgs = [read_json(os.path.join(PYPI_DATA_DIR, fname))
-                 for fname in fnames]
-    pypi_pkgs = {pkg["info"]["name"].lower(): pkg for pkg in pypi_pkgs}
+    pypi_pkgs = load_pypi(clobber=clobber)
 
     # Load ASCL packages
-    ascl_pkgs = read_json(ASCL_FILE)
-    ascl_pkgs = {pkg["title"].split(":")[0].lower(): pkg
-                 for pkg in ascl_pkgs.values()}  # re-key packages.
+    ascl_pkgs = load_ascl(clobber=clobber)
 
     # clean empty links in ASCL (there is at least one)
     for pkg in ascl_pkgs.values():
@@ -445,20 +492,10 @@ def render():
     # Try to fill in missing repos by getting homepage index page and scanning
     # links.
 
-    # Get stats from github
-
-
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Fetch the data.")
-    parser.add_argument("action", help="What to do?")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--clobber", default=False, action="store_true",
+                        help="Refetch all data, even if cached.")
     args = parser.parse_args()
-
-    if args.action == "fetch-pypi":
-        fetch_pypi()
-    elif args.action == "fetch-ascl":
-        urlretrieve(ASCL_URL, ASCL_FILE)
-    elif args.action == "get-source-url":
-        get_source_urls()
-    elif args.action == "render":
-        render()
+    main(clobber=args.clobber)
