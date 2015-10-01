@@ -12,6 +12,7 @@ import glob
 from datetime import datetime
 import time
 import shutil
+import re
 
 import requests
 from bs4 import BeautifulSoup
@@ -34,6 +35,8 @@ ASCL_URL = "http://ascl.net/code/json"
 ASCL_FILE = os.path.join(DATA_DIR, "ascl.json")
 
 PAGES_DIR = os.path.join(DATA_DIR, "pages")
+
+GITHUB_DIR = os.path.join(DATA_DIR, "github")
 
 def info(msg):
     """Print a line in blue (assumes we have a color terminal!)"""
@@ -180,6 +183,9 @@ def load_ascl(clobber=False):
        Dictionary, keyed by the package title.
     """
 
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
+
     if not os.path.exists(ASCL_FILE) or clobber:
         urlretrieve(ASCL_URL, ASCL_FILE)
     pkgs = read_json(ASCL_FILE)
@@ -187,6 +193,32 @@ def load_ascl(clobber=False):
     # re-key packages on the title before returning.
     return {pkg["title"].split(":")[0].lower(): pkg
             for pkg in pkgs.values()}
+
+
+def load_github(user, repo, clobber=False):
+    """Return package metadata fetched from GitHub.
+
+    Parameters
+    ----------
+    user : str
+    repo : str
+    clobber : bool
+        If true, re-fetch data even if cached data exists.
+
+    Returns
+    -------
+    dict
+    """
+
+    if not os.path.exists(GITHUB_DIR):
+        os.makedirs(GITHUB_DIR)
+
+    fname = os.path.join(GITHUB_DIR, "{}_{}.json".format(user, repo))
+    if not os.path.exists(fname) or clobber:
+        url = "https://api.github.com/repos/{}/{}".format(user, repo)
+        urlretrieve(url, fname)
+
+    return read_json(fname)
 
 
 def load_html_from_url(url, clobber=False):
@@ -216,37 +248,27 @@ def load_html_from_url(url, clobber=False):
         return f.read()
 
 
-def is_url_a_repo(url_string):
-    """ Check if a given URL string is a GitHub or BitBucket repository URL
-    (hopefully, the source code).
-
-    TODO: Check 'github.com/*/*' and 'bitbucket.org/*/*', so that you know the \
-    URL is directly to the repository directory.
+def parse_url_as_repo(url_string):
+    """ Check if a given URL string is a GitHub or BitBucket repository.
 
     Parameters
     ----------
     url_string : str
-        A URL scraped from href HTML tags on a website.
 
     Returns
     -------
-    bool
-        True if the URL is to a repository, False if it is not.
+    None or tuple of str
+        None if not a repository, otherwise ``(site, user, repo)``
     """
-    url_string = url_string.lower()
-    if ("github.com" in url_string or \
-            "bitbucket.org" in url_string or \
-            "ftp://" in url_string) and \
-            "/release" not in url_string and "/docs/" not in url_string:
-        # print("URL is a repo! %s" % url_string)
-        return True
-        # TODO: could get rid of the 'and' parts and check later if there's
-        # more than one 'source url' for a package, use the one without docs or
-        # releases, otherwise just use it
 
-    # print("URL is not a repo. %s" % url_string)
-    return False
+    # TODO: could also check ftp sites, but this would have a different
+    #       purpose (can't query an API for ftp sites!)
+    REGEX = r"https?://(www\.|)(github\.com|bitbucket\.org)/([^/]+)/([^/]+)/?\Z"
+    m = re.match(REGEX, url_string.lower())
+    return None if m is None else m.groups()[1:4]
 
+def is_url_a_repo(url):
+    return parse_url_as_repo(url) is not None
 
 def parse_html_for_urls(html_doc):
     """ Parse the sourcepage HTML for URLs, and return a list of all URLs.
@@ -308,24 +330,23 @@ def check_sourcecode_url(source_url):
         source_html = load_html_from_url(source_url)
     except:  # Catches any error. Hoping that only SSL errors come up here.
         # print("URL gives SSL error: %s" % url)
-        # Using tps:// instead of https:// to allow for ftps://
+        # NOTE: Using tps:// instead of https:// to allow for ftps://
         if "tp://" in source_url:
             source_url = source_url.replace('tp://', 'tps://')
-            try:
-                source_html = load_html_from_url(source_url)
-            except:
-                return None
         elif "tps://" in source_url:
             source_url = source_url.replace('tps://', 'tp://')
-            try:
-                source_html = load_html_from_url(source_url)
-            except:
-                return None
         else:
+            return None
+        
+        # Retry with https replaced by http or vice versa.
+        try:
+            source_html = load_html_from_url(source_url)
+        except:
             return None
 
     urls = parse_html_for_urls(source_html)
 
+    # return first link that looks like a repo.
     for link in urls:
         if is_url_a_repo(link):
             return link
@@ -381,38 +402,68 @@ def main(clobber=False):
         pkg = {"name": name,
                "urls": []}
 
-        if name in pypi_pkgs:
-            pypi_pkg = pypi_pkgs[name]
-            pkg["pypi_url"] = pypi_pkg['info']['package_url']
-            if "description" not in pkg:
-                pkg["description"] = pypi_pkg['info']['summary']
+        pypi_pkg = pypi_pkgs.get(name, None)
+        ascl_pkg = ascl_pkgs.get(name, None)
+
+        if pypi_pkg is not None:
+            pkg["description"] = pypi_pkg['info']['summary']
             pkg["language"] = "Python"
             pkg["language_from"] = "because package listed on PyPI"
+
+            # Homepage and docs url just both go into url list.
             if pypi_pkg["info"]["home_page"] is not None:
                 pkg["urls"].append(pypi_pkg["info"]["home_page"])
             if pypi_pkg["info"]["docs_url"] is not None:
                 pkg["urls"].append(pypi_pkg["info"]["docs_url"])
 
-        if name in ascl_pkgs:
-            ascl_pkg = ascl_pkgs[name]
-            pkg["ascl_url"] = 'http://ascl.net/' + ascl_pkg['ascl_id']
-            pkg["urls"].extend(ascl_pkg["site_list"])
+            # Page on pypi.python.org/pypi/
+            pkg["pypi_url"] = pypi_pkg['info']['package_url']
+
+        if ascl_pkg is not None:
             pkg["description"] = ascl_pkg["title"].split(':')[-1]
             if "language" not in pkg:
                 lang = detect_language(ascl_pkg["abstract"])
                 if lang is not None:
                     pkg["language"] = lang
                     pkg["language_from"] = "based on ASCL abstract"
-
-        for url in pkg["urls"]:
-            temp_link = check_sourcecode_url(url)
-            # print("Source url: %s" % temp_link)
-            pkg["sourcecode"] = temp_link
-            # TODO: once it finds a sourcecode link, break out of for-loop
+            pkg["urls"].extend(ascl_pkg["site_list"])
+            pkg["ascl_url"] = 'http://ascl.net/' + ascl_pkg['ascl_id']
 
         packages.append(pkg)
 
-    # print("\nDone with sourcecode URLs.\n")
+    # remove duplicate URLS
+    for pkg in packages:
+        pkg["urls"] = list(set(pkg["urls"]))
+
+    # For each package, go through URLs and find ones that look like repos.
+    for pkg in packages:
+        for i, url in enumerate(pkg["urls"]):
+            marker = "*" if is_url_a_repo(url) else " "
+            print("{:20s} {} {}".format(pkg["name"][:20], marker, url))
+            if is_url_a_repo(url):
+                # TODO: check multiple repos
+                #if "repo_url" in pkg:
+                #    raise RuntimeError("package {:s} has multiple repo URLs!"
+                #                       .format(pkg['name']))
+                pkg["repo_url"] = pkg["urls"].pop(i)
+
+
+    # Fetch github
+    for pkg in packages:
+        if "repo_url" in pkg:
+            site, user, repo = parse_url_as_repo(pkg["repo_url"])
+            if site == "github.com":
+                github_data = load_github(user, repo, clobber=clobber)
+                print(github_data)
+                exit()
+
+
+    #for url in pkg["urls"]:
+    #        temp_link = check_sourcecode_url(url)
+    #
+    #    #pkg["sourcecode"] = temp_link
+    #        # TODO: once it finds a sourcecode link, break out of for-loop
+
 
     # sort by name
     packages.sort(key=lambda x: x["name"])
