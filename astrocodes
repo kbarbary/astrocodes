@@ -40,6 +40,8 @@ PAGES_DIR = os.path.join(DATA_DIR, "pages")
 
 GITHUB_DIR = os.path.join(DATA_DIR, "github")
 
+BITBUCKET_DIR = os.path.join(DATA_DIR, "bitbucket")
+
 def info(msg):
     """Print a line in blue (assumes we have a color terminal!)"""
     print("\033[1m\033[34m", "INFO:", msg, "\033[0m")
@@ -142,7 +144,20 @@ def load_pypi(clobber=False):
     """Load 'astronomy' packages listed on PyPI.
 
     This includes packages with Astronomy in the keywords,
-    as well as packages with 'astro' or 'cosmo' in the description."""
+    as well as packages with 'astro' or 'cosmo' in the description.
+
+    Downloaded data is cached.
+
+    Parameters
+    ----------
+    clobber : bool
+        If true, re-fetch data even if cached data exists.
+
+    Returns
+    -------
+    pkgs : dict
+       Dictionary, keyed by the package title.
+    """
 
     if not os.path.exists(PYPI_DIR):
         os.makedirs(PYPI_DIR)
@@ -236,6 +251,32 @@ def load_github(user, repo, clobber=False):
     return read_json(fname)
 
 
+def load_bitbucket(user, repo, clobber=False):
+    """ Return package metadata fetched from BitBucket.
+
+    Parameters
+    ----------
+    user : str
+    repo : str
+    clobber : bool
+        If true, re-fetch data even if cached data exists.
+
+    Returns
+    -------
+    dict
+    """
+    if not os.path.exists(BITBUCKET_DIR):
+        os.makedirs(BITBUCKET_DIR)
+
+    fname = os.path.join(BITBUCKET_DIR, "{}_{}.json".format(user, repo))
+    if not os.path.exists(fname) or clobber:
+        url = "https://api.bitbucket.org/2.0/repositories/{}/{}".format(user, repo)
+        urlretrieve(url, fname)
+
+    return read_json(fname)
+
+
+
 def load_html_from_url(url, clobber=False):
     """Return HTML as string from URL. Caches downloaded files.
 
@@ -284,8 +325,12 @@ def load_html_from_url(url, clobber=False):
             #info("fetch " + url)
             #try:
             #    r = requests.get(url)  
-            #except:
-            #    content = ""
+        except:
+            print("Other URL error raised.")
+            content = ""
+
+            # TODO: If one of these errors is raised, remove the url and package
+            # from the list.
 
         with open(fname, "w") as f:
             f.write(content)
@@ -468,8 +513,9 @@ def main(clobber=False):
     # For each package, go through URLs and find ones that look like repos.
     for pkg in packages:
         for i, url in enumerate(pkg["urls"]):
-            #marker = "*" if is_url_a_repo(url) else " "
-            #print("{:20s} {} {}".format(pkg["name"][:20], marker, url))
+            # marker = "*" if is_url_a_repo(url) else " "
+            # print("{:20s} {} {}".format(pkg["name"][:20], marker, url))
+
             if is_url_a_repo(url):
                 # TODO: check multiple repos, as below!
                 #if "repo_url" in pkg:
@@ -482,7 +528,8 @@ def main(clobber=False):
     for pkg in packages:
         if "repo_url" not in pkg:
             norepo += 1
-    print("{}/{} repositories without a repo".format(norepo, len(packages)))
+    print("{}/{} software packages without a repo".format(norepo,
+                                                          len(packages)))
 
     # Attempt to find repo url in home page
     for pkg in packages:
@@ -503,22 +550,56 @@ def main(clobber=False):
     print("{}/{} repositories without a repo".format(norepo, len(packages)))
 
 
-    # Fetch github
+    # Fetch repo information (github or bitbucket)
     for pkg in packages:
         if "repo_url" in pkg:
             site, user, repo = parse_url_as_repo(pkg["repo_url"])
+            
             if site == "github.com":
                 github_data = load_github(user, repo, clobber=clobber)
+                # pprint(github_data)
+                # print("{}/{}".format(user, repo))
                 if github_data is None:
                     del pkg["repo_url"]
                 else:
-                    pkg['github'] = {
-                        "stargazers_count": github_data["stargazers_count"],
-                        "forks_count": github_data["forks_count"],
-                        "language": github_data["language"]
-                    }
+                    try:
+                        pkg["language"] = github_data["language"]
+                        pkg["forks_count"] = github_data["forks_count"]
+                        pkg['github'] = {
+                            "stargazers_count": github_data["stargazers_count"],
+                            "subscribe_count": github_data["subscribers_count"],
+                            "watchers_count": github_data["watchers_count"]
+                        }
+                        # TODO: get pushed_at and updated_at, use whichever is more
+						# recent. Sort list of strings? Convert ISO fmt string to
+						# python datetime obj?
+						# t = [github_data["pushed_at"], github_data["updated_at"]]
+                        pkg["last_updated"] = github_data["pushed_at"]
+                        pkg["created_on"] = github_data["created_at"]
+                        # exit()
+                    except KeyError:
+                        del pkg["repo_url"]
+						
+            elif site == "bitbucket.org":
+                bitbucket_data = load_bitbucket(user, repo, clobber=clobber)
+                # pprint(bitbucket_data)
+                if bitbucket_data is None:
+                    del pkg["repo_url"]
+                else:
+                    try:
+                        pkg["language"] = bitbucket_data["language"]
+                        pkg["created_on"] = bitbucket_data["created_on"]
+                        pkg["last_updated"] = bitbucket_data["updated_on"]
+                        # TODO: get number of watchers (in links:watchers:size),
+						#  Get number of forks (links:forks:size), 
+						# put in pkg["bitbucket"]= {}
+						# exit()
+                    except KeyError:
+                        del pkg["repo_url"]
 
 
+    # exit()
+    # TODO: add created_on, last_updated, watchers, forks to the printed stuff!
 
     # sort by name
     packages.sort(key=lambda x: x["name"])
