@@ -28,6 +28,10 @@ astrocodes
 Output HTML is placed in `output` directory. Data is cached in `data`
 directory. (Directories are automatically created.)
 
+## Authentication
+
+For the GitHub API, the script requires authentication for rate-limit reasons. Go to https://github.com/settings/tokens and generate a personal access token. Copy it and put it in a `GH_TOKEN` environment variable.
+
 ## Deploy
 
 To deploy built page to http://username.github.io/astrocodes, run

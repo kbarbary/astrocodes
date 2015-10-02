@@ -18,6 +18,8 @@ import requests
 from bs4 import BeautifulSoup
 from jinja2 import Template
 
+from gh import gh_request
+
 DATA_DIR = "data"
 STATIC_DIR = "static"
 OUTPUT_DIR = "output"
@@ -43,6 +45,15 @@ BITBUCKET_DIR = os.path.join(DATA_DIR, "bitbucket")
 def info(msg):
     """Print a line in blue (assumes we have a color terminal!)"""
     print("\033[1m\033[34m", "INFO:", msg, "\033[0m")
+
+auth_token=None
+
+
+def get_gh_auth_token():
+    global auth_token
+    if auth_token is None:
+        auth_token = os.environ["GH_TOKEN"]
+    return auth_token
 
 
 def urlretrieve(url, fname):
@@ -237,7 +248,11 @@ def load_github(user, repo, clobber=False):
     fname = os.path.join(GITHUB_DIR, "{}_{}.json".format(user, repo))
     if not os.path.exists(fname) or clobber:
         url = "https://api.github.com/repos/{}/{}".format(user, repo)
-        urlretrieve(url, fname)
+        info("fetch " + url)
+        r = requests.get(url, params={"access_token": get_gh_auth_token()})
+        content = 'null' if r.status_code == 404 else r.text
+        with open(fname, 'w') as f:
+            f.write(content)
 
     return read_json(fname)
 
@@ -290,7 +305,38 @@ def load_html_from_url(url, clobber=False):
     safe_url = url.replace(':', '-').replace('/', '-')
     fname = os.path.join(PAGES_DIR, safe_url)
     if not os.path.exists(fname) or clobber:
-        urlretrieve(url, fname)
+        info("fetch " + url)
+        try:
+            r = requests.get(url, timeout=10.)
+            if r.status_code != requests.codes.ok:
+                print(r.status_code)
+                r.raise_for_status()
+            content = r.text
+        except ConnectionRefusedError:
+            content = ""
+        except requests.exceptions.ConnectionError:
+            content = ""
+        except requests.exceptions.SSLError:
+            content = ""
+        except requests.exceptions.Timeout:
+            content = ""
+            # Try replacing url.
+            #if "http://" in url:
+            #    url = url.replace('tp://', 'tps://')
+            #elif "https://" in url:
+            #    url = url.replace('tps://', 'tp://')
+            #else:
+            #     return None
+            #
+            #info("fetch " + url)
+            #try:
+            #    r = requests.get(url)  
+            #except:
+            #    content = ""
+
+        with open(fname, "w") as f:
+            f.write(content)
+
     with open(fname, 'r') as f:
         return f.read()
 
@@ -351,7 +397,7 @@ def parse_html_for_urls(html_doc):
     return urls
 
 
-def check_sourcecode_url(source_url):
+def find_repo_url_in_page(url):
     """ Get the URL of the source code repository. Check for SSL errors while
     loading source html. URLs from the source webpage listed on PyPI or ASCL.
 
@@ -367,36 +413,13 @@ def check_sourcecode_url(source_url):
         code repository URL is found.
     """
 
-    if is_url_a_repo(source_url):
-        return source_url
-
-    if '.' not in source_url and '/' not in source_url:
-        return None
-
-    try:
-        source_html = load_html_from_url(source_url)
-    except:  # Catches any error. Hoping that only SSL errors come up here.
-        # print("URL gives SSL error: %s" % url)
-        # NOTE: Using tps:// instead of https:// to allow for ftps://
-        if "tp://" in source_url:
-            source_url = source_url.replace('tp://', 'tps://')
-        elif "tps://" in source_url:
-            source_url = source_url.replace('tps://', 'tp://')
-        else:
-            return None
-        
-        # Retry with https replaced by http or vice versa.
-        try:
-            source_html = load_html_from_url(source_url)
-        except:
-            return None
-
+    source_html = load_html_from_url(url)
     urls = parse_html_for_urls(source_html)
 
     # return first link that looks like a repo.
-    for link in urls:
-        if is_url_a_repo(link):
-            return link
+    for url in urls:
+        if is_url_a_repo(url):
+            return url
 
     return None
 
@@ -481,21 +504,54 @@ def main(clobber=False, test=False):
 
         packages.append(pkg)
 
-    # remove duplicate URLS
+    # clean urls:
+    # 1. duplicate URLS
+    # 2. "UNKNOWN" (appears)
+    # 3. "" (appears)
+    # 3. ftp sites (not supported by requests) (TODO)
     for pkg in packages:
         pkg["urls"] = list(set(pkg["urls"]))
+        pkg["urls"] = list(filter(lambda x: x != "UNKNOWN", pkg["urls"]))
+        pkg["urls"] = list(filter(lambda x: x[:6] != "ftp://", pkg["urls"]))
+        pkg["urls"] = list(filter(lambda x: x != "", pkg["urls"]))
 
     # For each package, go through URLs and find ones that look like repos.
     for pkg in packages:
         for i, url in enumerate(pkg["urls"]):
             # marker = "*" if is_url_a_repo(url) else " "
             # print("{:20s} {} {}".format(pkg["name"][:20], marker, url))
+
             if is_url_a_repo(url):
-                # TODO: check multiple repos
+                # TODO: check multiple repos, as below!
                 #if "repo_url" in pkg:
                 #    raise RuntimeError("package {:s} has multiple repo URLs!"
                 #                       .format(pkg['name']))
                 pkg["repo_url"] = pkg["urls"].pop(i)
+
+    # Count packages without repo_urls
+    norepo = 0
+    for pkg in packages:
+        if "repo_url" not in pkg:
+            norepo += 1
+    print("{}/{} repositories without a repo".format(norepo, len(packages)))
+
+    # Attempt to find repo url in home page
+    for pkg in packages:
+        if "repo_url" not in pkg:
+            for url in pkg["urls"]:
+                # check that page has .html or .htm or no ending.
+                page = url.split("/")[-1]
+                if "." not in page or page.split(".")[-1] in ["html", "htm"]:
+                    repo_url = find_repo_url_in_page(url)
+                    if repo_url is not None:
+                        pkg["repo_url"] = repo_url
+
+    # Count packages without repo_urls
+    norepo = 0
+    for pkg in packages:
+        if "repo_url" not in pkg:
+            norepo += 1
+    print("{}/{} repositories without a repo".format(norepo, len(packages)))
 
 
     # Fetch github
@@ -506,44 +562,44 @@ def main(clobber=False, test=False):
                 github_data = load_github(user, repo, clobber=clobber)
                 # pprint(github_data)
                 # print("{}/{}".format(user, repo))
-                try:
-                    pkg["language"] = github_data["language"]
-                    pkg["subscribe_count"] = github_data["subscribers_count"]
-                    pkg["star_count"] = github_data["stargazers_count"]
-                    pkg["watch_count"] = github_data["watchers_count"]
-                    pkg["forks_count"] = github_data["forks_count"]
-                    # TODO: get pushed_at and updated_at, use whichever is more
-                    # recent. Sort list of strings? Convert ISO fmt string to
-                    # python datetime obj?
-                    # t = [github_data["pushed_at"], github_data["updated_at"]]
-                    pkg["last_updated"] = github_data["pushed_at"]
-                    pkg["created_on"] = github_data["created_at"]
-                    # exit()
-                except KeyError:
-                    pass
-                    # TODO: if key error, the repo doesn't exist so we should
-                    # remove it from our list.
+                if github_data is None:
+                	del pkg["repo_url"]
+                else:
+					try:
+						pkg["language"] = github_data["language"]
+						pkg["forks_count"] = github_data["forks_count"]
+						pkg['github'] = {
+                        	"stargazers_count": github_data["stargazers_count"],
+                        	"subscribe_count": github_data["subscribers_count"],
+                        	"watchers_count": github_data["watchers_count"] 
+                    	}
+						# TODO: get pushed_at and updated_at, use whichever is more
+						# recent. Sort list of strings? Convert ISO fmt string to
+						# python datetime obj?
+						# t = [github_data["pushed_at"], github_data["updated_at"]]
+						pkg["last_updated"] = github_data["pushed_at"]
+						pkg["created_on"] = github_data["created_at"]
+						# exit()
+					except KeyError:
+						del pkg["repo_url"]
+						
             elif site == "bitbucket.org":
                 bitbucket_data = load_bitbucket(user, repo, clobber=clobber)
                 # pprint(bitbucket_data)
-                try:
-                    pkg["language"] = bitbucket_data["language"]
-                    pkg["created_on"] = bitbucket_data["created_on"]
-                    pkg["last_updated"] = bitbucket_data["updated_on"]
-                    # TODO: get number of watchers (in links:watchers:size),
-                    #  Get number of forks (links:forks:size)
-                    # exit()
-                except KeyError:
-                    pass
-                    # TODO: if key error, the repo doesn't exist so we should
-                    # remove it from our list.
+                if bitbucket_data is None:
+                	del pkg["repo_url"]
+                else:
+					try:
+						pkg["language"] = bitbucket_data["language"]
+						pkg["created_on"] = bitbucket_data["created_on"]
+						pkg["last_updated"] = bitbucket_data["updated_on"]
+						# TODO: get number of watchers (in links:watchers:size),
+						#  Get number of forks (links:forks:size), 
+						# put in pkg["bitbucket"]= {}
+						# exit()
+					except KeyError:
+						del pkg["repo_url"]
 
-
-    #for url in pkg["urls"]:
-    #        temp_link = check_sourcecode_url(url)
-    #
-    #    #pkg["sourcecode"] = temp_link
-    #        # TODO: once it finds a sourcecode link, break out of for-loop
 
     # exit()
     # TODO: add language, created_on, last_updated, watchers, forks to the printed stuff!
