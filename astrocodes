@@ -140,7 +140,7 @@ def parse_pypi_html(html_doc, terms=None, strip_version=False):
     return result
 
 
-def load_pypi(clobber=False, test=False):
+def load_pypi(clobber=False):
     """Load 'astronomy' packages listed on PyPI.
 
     This includes packages with Astronomy in the keywords,
@@ -152,9 +152,6 @@ def load_pypi(clobber=False, test=False):
     ----------
     clobber : bool
         If true, re-fetch data even if cached data exists.
-
-    test : bool
-        If true, only load first 20 files and run. Overrides clobber to True.
 
     Returns
     -------
@@ -196,7 +193,7 @@ def load_pypi(clobber=False, test=False):
     return result
 
 
-def load_ascl(clobber=False, test=False):
+def load_ascl(clobber=False):
     """Load packages from the Astrophysics Source Code Library.
 
     Downloaded data is cached.
@@ -205,9 +202,6 @@ def load_ascl(clobber=False, test=False):
     ----------
     clobber : bool
         If true, re-fetch data even if cached data exists.
-
-    test : bool
-        If true, only load first 20 files and run. Overrides clobber to True.
 
     Returns
     -------
@@ -331,8 +325,12 @@ def load_html_from_url(url, clobber=False):
             #info("fetch " + url)
             #try:
             #    r = requests.get(url)  
-            #except:
-            #    content = ""
+        except:
+            print("Other URL error raised.")
+            content = ""
+
+            # TODO: If one of these errors is raised, remove the url and package
+            # from the list.
 
         with open(fname, "w") as f:
             f.write(content)
@@ -448,17 +446,14 @@ def detect_language(s):
     return None
 
 
-def main(clobber=False, test=False):
+def main(clobber=False):
     """Do everything."""
 
-    if test is True:
-        clobber = True
-
     # Load PyPI packages
-    pypi_pkgs = load_pypi(clobber=clobber, test=test)
+    pypi_pkgs = load_pypi(clobber=clobber)
 
     # Load ASCL packages
-    ascl_pkgs = load_ascl(clobber=clobber, test=test)
+    ascl_pkgs = load_ascl(clobber=clobber)
 
     # clean empty links in ASCL (there is at least one)
     for pkg in ascl_pkgs.values():
@@ -533,7 +528,8 @@ def main(clobber=False, test=False):
     for pkg in packages:
         if "repo_url" not in pkg:
             norepo += 1
-    print("{}/{} repositories without a repo".format(norepo, len(packages)))
+    print("{}/{} software packages without a repo".format(norepo,
+                                                          len(packages)))
 
     # Attempt to find repo url in home page
     for pkg in packages:
@@ -554,55 +550,56 @@ def main(clobber=False, test=False):
     print("{}/{} repositories without a repo".format(norepo, len(packages)))
 
 
-    # Fetch github
+    # Fetch repo information (github or bitbucket)
     for pkg in packages:
         if "repo_url" in pkg:
             site, user, repo = parse_url_as_repo(pkg["repo_url"])
+            
             if site == "github.com":
                 github_data = load_github(user, repo, clobber=clobber)
                 # pprint(github_data)
                 # print("{}/{}".format(user, repo))
                 if github_data is None:
-                	del pkg["repo_url"]
+                    del pkg["repo_url"]
                 else:
-					try:
-						pkg["language"] = github_data["language"]
-						pkg["forks_count"] = github_data["forks_count"]
-						pkg['github'] = {
-                        	"stargazers_count": github_data["stargazers_count"],
-                        	"subscribe_count": github_data["subscribers_count"],
-                        	"watchers_count": github_data["watchers_count"] 
-                    	}
-						# TODO: get pushed_at and updated_at, use whichever is more
+                    try:
+                        pkg["language"] = github_data["language"]
+                        pkg["forks_count"] = github_data["forks_count"]
+                        pkg['github'] = {
+                            "stargazers_count": github_data["stargazers_count"],
+                            "subscribe_count": github_data["subscribers_count"],
+                            "watchers_count": github_data["watchers_count"]
+                        }
+                        # TODO: get pushed_at and updated_at, use whichever is more
 						# recent. Sort list of strings? Convert ISO fmt string to
 						# python datetime obj?
 						# t = [github_data["pushed_at"], github_data["updated_at"]]
-						pkg["last_updated"] = github_data["pushed_at"]
-						pkg["created_on"] = github_data["created_at"]
-						# exit()
-					except KeyError:
-						del pkg["repo_url"]
+                        pkg["last_updated"] = github_data["pushed_at"]
+                        pkg["created_on"] = github_data["created_at"]
+                        # exit()
+                    except KeyError:
+                        del pkg["repo_url"]
 						
             elif site == "bitbucket.org":
                 bitbucket_data = load_bitbucket(user, repo, clobber=clobber)
                 # pprint(bitbucket_data)
                 if bitbucket_data is None:
-                	del pkg["repo_url"]
+                    del pkg["repo_url"]
                 else:
-					try:
-						pkg["language"] = bitbucket_data["language"]
-						pkg["created_on"] = bitbucket_data["created_on"]
-						pkg["last_updated"] = bitbucket_data["updated_on"]
-						# TODO: get number of watchers (in links:watchers:size),
+                    try:
+                        pkg["language"] = bitbucket_data["language"]
+                        pkg["created_on"] = bitbucket_data["created_on"]
+                        pkg["last_updated"] = bitbucket_data["updated_on"]
+                        # TODO: get number of watchers (in links:watchers:size),
 						#  Get number of forks (links:forks:size), 
 						# put in pkg["bitbucket"]= {}
 						# exit()
-					except KeyError:
-						del pkg["repo_url"]
+                    except KeyError:
+                        del pkg["repo_url"]
 
 
     # exit()
-    # TODO: add language, created_on, last_updated, watchers, forks to the printed stuff!
+    # TODO: add created_on, last_updated, watchers, forks to the printed stuff!
 
     # sort by name
     packages.sort(key=lambda x: x["name"])
@@ -634,8 +631,5 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--clobber", default=False, action="store_true",
                         help="Refetch all data, even if cached.")
-    parser.add_argument("--test", default=False, action="store_true",
-                        help="Test the program on first 20 packages." \
-                             "Overrides clobber to True.")
     args = parser.parse_args()
-    main(clobber=args.clobber, test=args.test)
+    main(clobber=args.clobber)
