@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="css/bootstrap.min.css">
   <link rel="stylesheet" href="style/octicons.css">
   <link rel="stylesheet" href="style/hint.min.css">
-
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.4.0/css/font-awesome.min.css"> <!-- for bitbucket icon -->
   <style>
 .label {
   font-variant: small-caps;
@@ -51,6 +51,7 @@ body {
       <th>Repo</th>
       <th><span class="hint--bottom hint--rounded " data-hint="Stars"><span class="octicon octicon-star"></span></span></th>
       <th><span class="hint--bottom hint--rounded " data-hint="Forks"><span class="octicon octicon-repo-forked"></span></span></th>
+       <th><span class="hint--bottom hint--rounded " data-hint="Forks"><span class="octicon octicon-eye"></span></span></th>
     </tr>
   </thead>
   <tbody>
@@ -79,7 +80,13 @@ bounce" data-hint="{{ pkg.language_from }}">{{ pkg.language }}</span>
       </td>
       <td>
           {%  if pkg.repo_url is defined %}
-          <a href="{{ pkg.repo_url }}">URL</a>
+          {% if "github.com" in pkg.repo_url %}
+          <a href="{{ pkg.repo_url }}"><span class="octicon octicon-mark-github"></span></a>
+          {% elif "bitbucket.org" in pkg.repo_url %}
+               <a href="{{ pkg.repo_url }}"><span class="fa fa-bitbucket"></span></a>
+          {% else %}
+               <a href="{{ pkg.repo_url }}">URL</a>
+          {% endif %}
           {% endif %}
       </td>
       <td>
@@ -88,8 +95,13 @@ bounce" data-hint="{{ pkg.language_from }}">{{ pkg.language }}</span>
           {% endif %} 
       </td>
       <td>
+          {%  if pkg.forks_count is defined %}
+          {{ pkg.forks_count }}
+          {% endif %} 
+      </td>
+      <td>
           {%  if pkg.github is defined %}
-          {{ pkg.github.forks_count }}
+          {{ pkg.github.watchers_count }}
           {% endif %} 
       </td>
     </tr>
