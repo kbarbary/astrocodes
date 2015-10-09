@@ -30,7 +30,21 @@ directory. (Directories are automatically created.)
 
 ## Authentication
 
-For the GitHub API, the script requires authentication for rate-limit reasons. Go to https://github.com/settings/tokens and generate a personal access token. Copy it and put it in a `GH_TOKEN` environment variable.
+For the GitHub API, the script requires authentication for rate-limit
+reasons. There are two ways to do this:
+
+1. Requests will by default try to read your github user name and password
+   from a `~/.netrc` file. Add a line like
+   ```
+   machine api.github.com login USERNAME password PASSWORD
+   ```
+   where USERNAME and PASSWORD are your GitHub username and password.
+
+2. Go to https://github.com/settings/tokens and generate a
+   personal access token. Copy it and put it in a `GH_TOKEN` environment
+   variable. Use this method if you have 2-factor authentication (2FA)
+   set up. An entry in `~/.netrc` (as above) seems to conflict with this
+   method so make sure to not use both.
 
 ## Deploy
 

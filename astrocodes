@@ -44,12 +44,13 @@ def info(msg):
     """Print a line in blue (assumes we have a color terminal!)"""
     print("\033[1m\033[34m", "INFO:", msg, "\033[0m")
 
-auth_token=None
+auth_token = None
 
 
 def get_gh_auth_token():
+    """Return the GH_TOKEN environment variable or None if not defined."""
     global auth_token
-    if auth_token is None:
+    if auth_token is None and "GH_TOKEN" in os.environ:
         auth_token = os.environ["GH_TOKEN"]
     return auth_token
 
@@ -240,8 +241,13 @@ def load_github(user, repo, clobber=False):
     fname = os.path.join(GITHUB_DIR, "{}_{}.json".format(user, repo))
     if not os.path.exists(fname) or clobber:
         url = "https://api.github.com/repos/{}/{}".format(user, repo)
+
+        # supply access token if available.
+        token = get_gh_auth_token()
+        params = None if token is None else {"access_token": token}
+
         info("fetch " + url)
-        r = requests.get(url, params={"access_token": get_gh_auth_token()})
+        r = requests.get(url, params=params)
         content = 'null' if r.status_code == 404 else r.text
         with open(fname, 'w') as f:
             f.write(content)
